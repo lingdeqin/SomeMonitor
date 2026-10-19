@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+# 用户配置可能包含 API Key，运行时状态为本地数据，均不入库
+config.jsonc
+state.json
+# 实测响应抓包等本地证据及 agent 运行时数据
+.omo/
+# PyInstaller 构建产物
+build/
+dist/
+*.spec
