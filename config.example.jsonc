@@ -1,0 +1,111 @@
+{
+  // ==================================================================
+  // Coding Plan 额度悬浮窗 —— 配置示例（全部可配置项）
+  //
+  // 用法：复制本文件为 config.jsonc 后按需修改（App 只读取 config.jsonc，
+  // 本文件不会被读取，仅作说明文档）。配置支持 // 注释与尾随逗号。
+  // 注意：config.jsonc 含密钥，已被 .gitignore 排除，不会入库。
+  // ==================================================================
+
+  // 自动刷新间隔（秒）。默认 60；网络失败时保留上次数据并标注获取时间。
+  "refresh_seconds": 60,
+
+  // 整窗不透明度，取值 0.3 ~ 1.0，默认 0.9。
+  // 在悬浮窗右键菜单里拖动滑块的调节结果会保存到 state.json 并优先生效。
+  "opacity": 0.9,
+
+  // 是否始终置顶，默认 true。右键菜单「始终置顶」开关的结果同样存 state.json 优先生效。
+  "always_on_top": true,
+
+  // 剩余百分比告警阈值（进度条分级警示色）：
+  //   剩余 <= warn_percent   -> 黄色
+  //   剩余 <= danger_percent -> 红色
+  "warn_percent": 30,
+  "danger_percent": 10,
+
+  // 卡片宽度（像素），默认 380。
+  "card_width": 380,
+
+  // 窗口行各段显示宽度（像素）：类型名 / 百分比 / 已用总量 / 重置时间；
+  // 进度条占据该行剩余空间。每行单行展示全部五段。
+  "row_layout": {
+    "name_width": 52,
+    "percent_width": 48,
+    "usage_width": 88,
+    "reset_width": 104
+  },
+
+  // 各厂商配置：数组顺序即卡片顺序。
+  // - "vendor"：厂商（opencode-go / ark / glm / kimi）
+  // - "visible"：是否显示；false 时该厂商不采集、不显示卡片
+  // 没有购买套餐的厂商可整项删除，或把 visible 设为 false。
+  // 每个账号一张卡片；accounts 留空数组时走环境变量 / CLI 自动发现。
+  // 凭证解析优先级：api_key > 环境变量 > 本机 CLI 登录态
+  "providers": [
+    // ------------------------------ OpenCode Go ------------------------------
+    // 环境变量：OPENCODE_GO_API_KEY / OPENCODE_API_KEY
+    // CLI 登录态：~\.config\opencode\auth.json
+    {
+      "vendor": "opencode-go",
+      "visible": true,
+      "accounts": [
+        { "label": "主号", "api_key": "oc_sk_xxxxxxxxxxxxxxxx" }
+      ]
+    },
+
+    // ------------------------------ 火山方舟 ------------------------------
+    // transport 三种取值：
+    //   "auto"（默认）：账号有成对 IAM AK/SK 走直连，否则走本机 arkcli
+    //   "arkcli"      ：强制走本机 arkcli 登录态（先 arkcli auth login）
+    //   "openapi"     ：强制 IAM AK/SK 直连
+    // 注意：ark- 开头的方舟 API Key 不能直连控制面额度接口（实测 400）。
+    // 多账号必读（详见 README「火山方舟多账号」）：推荐 IAM AK/SK 成对直连。
+    {
+      "vendor": "ark",
+      "visible": true,
+      "transport": "auto",
+      "accounts": [
+        // 方式一（多账号推荐）：IAM AK/SK 直连（火山控制台创建的访问密钥，成对填写）
+        { "label": "火山方舟A", "access_key_id": "AKLTxxx", "secret_access_key": "xxxxx" },
+
+        // 方式二：arkcli profile（跨账号不保证可用，见 README）
+        // { "label": "账号C", "profile": "coding-plan_cn-beijing_xxx" }
+
+        // 方式三：不写凭证字段 -> 走本机默认 arkcli 登录态
+        // { "label": "本机默认" }
+      ]
+    },
+
+    // ------------------------------ 智谱 GLM ------------------------------
+    // 环境变量：BIGMODEL_API_KEY（国内）/ ZAI_API_KEY（国际）
+    {
+      "vendor": "glm",
+      "visible": true,
+      "accounts": [
+        // 国内版（open.bigmodel.cn）
+        { "label": "国内号", "api_key": "xxxxxxxx.yyyyyyyy" },
+        // 国际版（api.z.ai）：加 "channel": "global"
+        { "label": "国际号", "api_key": "xxxxxxxx.yyyyyyyy", "channel": "global" }
+      ]
+    },
+
+    // ------------------------------ Kimi ------------------------------
+    // api_key：在 https://www.kimi.com/code/console 创建（sk-kimi-* 开头；
+    //          注意不是 Moonshot 开放平台 platform.kimi.com 的按量 Key）
+    // refresh_token（推荐，月度会员共享额度用）：浏览器 F12 → 应用 →
+    //          本地存储 → kimi.com → 键名 refresh_token 的值（约 90 天有效，
+    //          悬浮窗自动续期 access token，与浏览器互不干扰）。
+    //          也可用环境变量 KIMI_REFRESH_TOKEN。
+    {
+      "vendor": "kimi",
+      "visible": true,
+      "accounts": [
+        {
+          "label": "主号",
+          "api_key": "sk-kimi-xxxxxxxxxxxx",
+          "refresh_token": "eyJhbGciOi...（浏览器 localStorage 中 refresh_token 的完整值）"
+        }
+      ]
+    }
+  ]
+}
