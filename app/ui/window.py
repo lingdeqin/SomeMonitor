@@ -272,6 +272,7 @@ class MainWindow(QWidget):
             row_layout=dict(self.config.get("row_layout") or {}),
             card_width=int(self.config.get("card_width", 380)),
             hidden_types=self._hidden_types(),
+            balance_row_layout=dict(self.config.get("balance_row_layout") or {}),
         )
 
     def refresh(self) -> None:

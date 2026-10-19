@@ -1,0 +1,48 @@
+{
+  "code": 0,
+  "msg": "ok",
+  "data": {
+    "biz_code": 0,
+    "biz_msg": "",
+    "biz_data": {
+      "start": 1760803200,
+      "end": 1760889600,
+      "bucket": 86400,
+      "models": ["deepseek-chat", "deepseek-reasoner"],
+      "data": [
+        {
+          "currency": "CNY",
+          "series": [
+            {
+              "api_key": "sk-abc",
+              "model": "deepseek-chat",
+              "buckets": [
+                {"time": 1760803200, "cost": 1.03},
+                {"time": 1760806800, "cost": "2.20"}
+              ]
+            },
+            {
+              "api_key": "sk-abc",
+              "model": "deepseek-reasoner",
+              "buckets": [
+                {"time": 1760810400, "cost": "2.00"}
+              ]
+            }
+          ]
+        },
+        {
+          "currency": "USD",
+          "series": [
+            {
+              "api_key": "sk-abc",
+              "model": "deepseek-chat",
+              "buckets": [
+                {"time": 1760803200, "cost": 0.15}
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

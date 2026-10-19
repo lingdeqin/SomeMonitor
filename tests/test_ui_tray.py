@@ -49,6 +49,17 @@ def test_aggregate_level_frozen_counts_as_danger():
     assert aggregate_level(snapshots, warn_percent=30, danger_percent=10) == "danger"
 
 
+def test_aggregate_level_ignores_balance_only_cards():
+    # 余额型卡片（无窗口）不参与托盘告警分级：混合时以窗口卡为准
+    from app.model import BalanceInfo
+
+    snapshot = _snapshot("deepseek", [])
+    snapshot.balance = BalanceInfo(currency="CNY", total=110.0, today_spent=5.0)
+    assert aggregate_level([snapshot]) == "none"
+    mixed = [snapshot, _snapshot("glm", [_window(95)])]
+    assert aggregate_level(mixed, warn_percent=30, danger_percent=10) == "danger"
+
+
 def test_tooltip_lists_each_card():
     snapshots = [
         _snapshot("glm", [_window(80)]),

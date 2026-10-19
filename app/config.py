@@ -28,6 +28,10 @@ DEFAULT_CONFIG: dict = {
         "usage_width": 88,
         "reset_width": 104,
     },
+    # 余额行（DeepSeek 等按量付费卡片）名称段宽度；默认对齐 row_layout.name_width
+    "balance_row_layout": {
+        "name_width": 52,
+    },
     # 各厂商配置：数组顺序即卡片顺序；
     # visible 为 false 或未列出的厂商不采集、不显示（适合没买套餐的厂商）
     "providers": [
@@ -35,6 +39,7 @@ DEFAULT_CONFIG: dict = {
         {"vendor": "ark", "visible": True, "transport": "auto", "accounts": []},
         {"vendor": "glm", "visible": True, "accounts": []},
         {"vendor": "kimi", "visible": True, "accounts": []},
+        {"vendor": "deepseek", "visible": True, "accounts": []},
     ],
 }
 
@@ -72,6 +77,17 @@ CONFIG_TEMPLATE = r"""{
     "reset_width": 104
   },
 
+  // 余额行（DeepSeek 等按量付费卡片）宽度配置（像素）。
+  // 两段（今日已用 / 余额）结构：赠送余额 > 0 时余额金额显示为
+  // 「¥充值 + ¥赠送」，否则仅「¥总额」。
+  // name_width：两段名称默认宽，默认 52 与 row_layout.name_width 一致。
+  // 可按段覆盖：<段>_name_width / <段>_value_width，段名 spent（今日已用）/
+  //   balance（余额）；数值宽设置后定宽右对齐，未设置自适应内容宽度。示例：
+  //   { "name_width": 52, "spent_name_width": 64, "spent_value_width": 88 }
+  "balance_row_layout": {
+    "name_width": 52
+  },
+
   // 各厂商配置：数组顺序即卡片顺序。
   // "visible": false 或整项删除 -> 该厂商不采集、不显示（适合没买套餐的厂商）。
   // 凭证优先级：账号里的 api_key > 环境变量 > 本机 CLI 登录态（零配置）
@@ -105,6 +121,15 @@ CONFIG_TEMPLATE = r"""{
       // Kimi：Key 在 kimi.com/code/console 创建（sk-kimi-* 开头）
       // 月度会员额度建议配 "refresh_token"（约 90 天有效，自动续期，见 README）
       "vendor": "kimi",
+      "visible": true,
+      "accounts": []
+    },
+    {
+      // DeepSeek（按量付费）：platform.deepseek.com 创建 API Key
+      // 显示余额 / 赠送余额；「今日已用」默认为差值记账估算值
+      // 想要精确值可配 "user_token"（浏览器 localStorage，会过期，见 README）
+      // 多币种账户可用 "currency": "CNY" / "USD" 指定展示币种
+      "vendor": "deepseek",
       "visible": true,
       "accounts": []
     }

@@ -34,7 +34,7 @@ def main(argv=None) -> int:
     app = QApplication(sys.argv[:1])
     apply_app_style(app)
 
-    service = QuotaService(build_providers(config))
+    service = QuotaService(build_providers(config, data_dir=config_path.parent))
     window = MainWindow(config, state, str(state_path), service)
 
     tray = TrayController(window, config)

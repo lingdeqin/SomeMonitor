@@ -1,9 +1,11 @@
-"""app.model 单元测试：归一化四场景 + 数值/时间解析。"""
+"""app.model 单元测试：归一化四场景 + 数值/时间解析 + 余额模型。"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
 
 from app.model import (
+    BalanceInfo,
+    QuotaSnapshot,
     QuotaWindow,
     WindowType,
     parse_datetime,
@@ -81,3 +83,25 @@ def test_parse_datetime_invalid_returns_none():
     assert parse_datetime("") is None
     assert parse_datetime("not-a-date") is None
     assert parse_datetime(None) is None
+
+
+def test_balance_info_defaults_keep_missing():
+    info = BalanceInfo()
+    assert info.currency is None
+    assert info.total is None
+    assert info.granted is None
+    assert info.topped_up is None
+    assert info.today_spent is None
+    assert info.today_spent_estimated is False
+
+
+def test_snapshot_balance_defaults_to_none():
+    snapshot = QuotaSnapshot(vendor="deepseek", account_label="默认")
+    assert snapshot.balance is None
+
+    info = BalanceInfo(currency="CNY", total=110.0, granted=10.0)
+    snapshot_with_balance = QuotaSnapshot(
+        vendor="deepseek", account_label="默认", balance=info
+    )
+    assert snapshot_with_balance.balance is info
+    assert snapshot_with_balance.windows == []

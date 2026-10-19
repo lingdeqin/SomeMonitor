@@ -14,13 +14,21 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.model import ProviderStatus, QuotaSnapshot, QuotaWindow, WindowType, window_label
+from app.model import (
+    BalanceInfo,
+    ProviderStatus,
+    QuotaSnapshot,
+    QuotaWindow,
+    WindowType,
+    window_label,
+)
 
 VENDOR_NAMES = {
     "opencode-go": "OpenCode Go",
     "ark": "火山方舟",
     "glm": "智谱 GLM",
     "kimi": "Kimi",
+    "deepseek": "DeepSeek",
 }
 
 WINDOW_ORDER = [
@@ -38,6 +46,20 @@ DEFAULT_ROW_LAYOUT = {
     "usage_width": 88,
     "reset_width": 104,
 }
+# 余额行（今日已用、余额段）仅名称段定宽，默认对齐 row_layout.name_width
+DEFAULT_BALANCE_ROW_LAYOUT = {"name_width": DEFAULT_ROW_LAYOUT["name_width"]}
+
+# 余额行两段（从左至右）的配置键前缀：今日已用 / 余额（含赠送合并形态）
+BALANCE_SEGMENTS = ("spent", "balance")
+
+
+def _segment_widths(cfg: dict, segment: str) -> tuple:
+    """按段解析 (名称宽, 数值宽)：段键 > 全局键 > 内置默认；数值宽未设置为 None。"""
+    name_width = (
+        cfg.get(f"{segment}_name_width") or cfg.get("name_width")
+    )
+    value_width = cfg.get(f"{segment}_value_width") or cfg.get("value_width")
+    return int(name_width), int(value_width) if value_width else None
 
 
 def fmt_decimal(value: float) -> str:
@@ -206,6 +228,97 @@ class FreezeRow(QWidget):
         self.badge_label.setText("已冻结" if frozen else "正常")
 
 
+CURRENCY_SYMBOLS = {"CNY": "¥", "USD": "$"}
+
+
+def _fmt_money(balance: BalanceInfo, value: float) -> str:
+    symbol = CURRENCY_SYMBOLS.get(balance.currency or "", "")
+    return f"{symbol}{value:.2f}"
+
+
+def _balance_entries(balance: BalanceInfo) -> list:
+    """余额行两段的 (名称, 文本) 列表，从左至右：今日已用、余额段；缺失字段省略对应段。
+
+    余额段名称统一为「余额」；金额按赠送拆分：赠送 > 0 时为
+    「充值 + 赠送」（充值缺失时以 total - granted 推导并夹取 ≥0），
+    赠送 0/缺失时仅为总余额。
+    """
+    entries = []
+    if balance.today_spent is not None:
+        text = _fmt_money(balance, balance.today_spent)
+        if balance.today_spent_estimated:
+            text += "（估算）"
+        entries.append(("今日已用", text))
+    if balance.total is not None:
+        granted = balance.granted
+        if granted is not None and granted > 0:
+            topped_up = balance.topped_up
+            if topped_up is None:
+                topped_up = balance.total - granted
+            entries.append(
+                (
+                    "余额",
+                    f"{_fmt_money(balance, max(topped_up, 0.0))} + "
+                    f"{_fmt_money(balance, granted)}",
+                )
+            )
+        else:
+            entries.append(("余额", _fmt_money(balance, balance.total)))
+    return entries
+
+
+class BalanceRow(QWidget):
+    """余额信息行（按量付费厂商如 DeepSeek）：单行两段。
+
+    从左至右依次为今日已用、余额段；每段 [名称（定宽）][数值]，
+    宽度按段可配（`balance_row_layout` 的 `<段>_name_width` / `<段>_value_width`，
+    未覆盖回退 `name_width`；数值宽设置后定宽右对齐，未设置自适应）；
+    字段缺失的段隐藏而非销毁（布局自动左移补位），避免行增删抖动。
+    """
+
+    def __init__(
+        self,
+        balance: BalanceInfo,
+        layout_cfg: Optional[dict] = None,
+        parent: Optional[QWidget] = None,
+    ) -> None:
+        super().__init__(parent)
+        cfg = {**DEFAULT_BALANCE_ROW_LAYOUT, **(layout_cfg or {})}
+        hbox = QHBoxLayout(self)
+        hbox.setContentsMargins(0, 0, 0, 0)
+        hbox.setSpacing(6)
+        self._labels = []
+        for segment in BALANCE_SEGMENTS:
+            name_width, value_width = _segment_widths(cfg, segment)
+            name_label = QLabel(self)
+            name_label.setFixedWidth(name_width)
+            value_label = QLabel(self)
+            if value_width is not None:
+                value_label.setFixedWidth(value_width)
+                value_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
+            hbox.addWidget(name_label)
+            hbox.addWidget(value_label)
+            self._labels.append((name_label, value_label))
+        hbox.addStretch(1)
+        self.balance: Optional[BalanceInfo] = None
+        self.update_balance(balance)
+
+    def update_balance(self, balance: BalanceInfo) -> None:
+        self.balance = balance
+        entries = _balance_entries(balance)
+        for index, (name_label, value_label) in enumerate(self._labels):
+            if index < len(entries):
+                name, text = entries[index]
+                name_label.setText(name)
+                if value_label.text() != text:
+                    value_label.setText(text)
+                name_label.setVisible(True)
+                value_label.setVisible(True)
+            else:
+                name_label.setVisible(False)
+                value_label.setVisible(False)
+
+
 class AccountCard(QFrame):
     """单个账号（或计划）的额度卡片。
 
@@ -221,12 +334,17 @@ class AccountCard(QFrame):
         row_layout: Optional[dict] = None,
         card_width: int = DEFAULT_CARD_WIDTH,
         hidden_types: Optional[set] = None,
+        balance_row_layout: Optional[dict] = None,
         parent: Optional[QWidget] = None,
     ) -> None:
         super().__init__(parent)
         self.warn_percent = warn_percent
         self.danger_percent = danger_percent
         self._layout_cfg = {**DEFAULT_ROW_LAYOUT, **(row_layout or {})}
+        self._balance_layout_cfg = {
+            **DEFAULT_BALANCE_ROW_LAYOUT,
+            **(balance_row_layout or {}),
+        }
         self.hidden_types = set(hidden_types or ())
         self.setObjectName("accountCard")
         self.setFixedWidth(int(card_width))
@@ -248,6 +366,7 @@ class AccountCard(QFrame):
         self._rows = {}
         self._special_label = None
         self._info_labels = []
+        self._balance_row = None
         self.snapshot: Optional[QuotaSnapshot] = None
         self.update_snapshot(snapshot)
 
@@ -276,7 +395,12 @@ class AccountCard(QFrame):
         self._special_label = self._set_special(None)
         ordered = self._ordered_windows()
         row_widgets = self._sync_rows(ordered)
-        if not ordered and snapshot.status == ProviderStatus.OK:
+        row_widgets = self._sync_balance(snapshot.balance, row_widgets)
+        if (
+            not ordered
+            and self._balance_row is None
+            and snapshot.status == ProviderStatus.OK
+        ):
             self._special_label = self._set_special("未订阅")
         info_entries = []
         if snapshot.stale:
@@ -349,6 +473,27 @@ class AccountCard(QFrame):
             self._body.removeWidget(row)
             row.deleteLater()
         self._rows = {}
+        if self._balance_row is not None:
+            self._body.removeWidget(self._balance_row)
+            self._balance_row.deleteLater()
+            self._balance_row = None
+
+    def _sync_balance(self, balance, row_widgets: list) -> list:
+        """余额行跟随快照增删更新；置于窗口行之后（无窗口则紧跟标题）。"""
+        if balance is not None and balance.total is not None:
+            if self._balance_row is None:
+                self._balance_row = BalanceRow(
+                    balance, self._balance_layout_cfg, parent=self
+                )
+            else:
+                self._balance_row.update_balance(balance)
+            if self._balance_row not in row_widgets:
+                row_widgets.append(self._balance_row)
+        elif self._balance_row is not None:
+            self._body.removeWidget(self._balance_row)
+            self._balance_row.deleteLater()
+            self._balance_row = None
+        return row_widgets
 
     def _set_special(self, text, object_name: str = "muted"):
         """维护唯一的特殊状态标签（未配置 / 获取失败 / 未订阅）；text 为 None 时移除。"""

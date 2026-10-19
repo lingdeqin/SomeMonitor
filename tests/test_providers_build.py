@@ -1,8 +1,10 @@
 """providers.build_providers 单元测试：列表式配置解析（vendor/visible/顺序）。"""
 from __future__ import annotations
 
+from app.model import ProviderStatus
 from app.providers import build_providers, providers_config_error
 from app.providers.ark import ArkProvider
+from app.providers.deepseek import DeepSeekProvider
 from app.providers.glm import GlmProvider
 from app.providers.kimi import KimiProvider
 
@@ -93,3 +95,30 @@ def test_provider_types_match_vendors():
     providers = build_providers(config, env={})
     assert isinstance(providers[0], GlmProvider)
     assert isinstance(providers[1], KimiProvider)
+
+
+def test_deepseek_provider_built_with_data_dir(tmp_path):
+    config = {"providers": [{"vendor": "deepseek", "visible": True, "accounts": []}]}
+    providers = build_providers(config, env={}, data_dir=tmp_path)
+    assert [p.vendor_id for p in providers] == ["deepseek"]
+    assert isinstance(providers[0], DeepSeekProvider)
+    assert providers[0]._ledger._path == tmp_path / "deepseek_ledger.json"
+
+
+def test_deepseek_without_data_dir_keeps_ledger_in_memory():
+    config = {"providers": [{"vendor": "deepseek", "visible": True, "accounts": []}]}
+    provider = build_providers(config, env={})[0]
+    assert provider._ledger._path is None
+
+
+def test_deepseek_visible_false_skipped():
+    config = {"providers": [{"vendor": "deepseek", "visible": False, "accounts": []}]}
+    assert build_providers(config, env={}) == []
+
+
+def test_deepseek_unconfigured_without_credential():
+    config = {"providers": [{"vendor": "deepseek", "visible": True, "accounts": []}]}
+    provider = build_providers(config, env={})[0]
+    snapshots = provider.fetch_all()
+    assert snapshots[0].vendor == "deepseek"
+    assert snapshots[0].status == ProviderStatus.UNCONFIGURED

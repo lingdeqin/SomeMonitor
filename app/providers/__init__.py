@@ -11,6 +11,7 @@ PROVIDER_CLASSES = (
     "ArkProvider",
     "GlmProvider",
     "KimiProvider",
+    "DeepSeekProvider",
 )
 
 LEGACY_PROVIDERS_HINT = (
@@ -25,8 +26,15 @@ def _load_classes():
     from app.providers.ark import ArkProvider
     from app.providers.glm import GlmProvider
     from app.providers.kimi import KimiProvider
+    from app.providers.deepseek import DeepSeekProvider
 
-    return (OpenCodeGoProvider, ArkProvider, GlmProvider, KimiProvider)
+    return (
+        OpenCodeGoProvider,
+        ArkProvider,
+        GlmProvider,
+        KimiProvider,
+        DeepSeekProvider,
+    )
 
 
 def providers_config_error(config: dict) -> Optional[str]:
@@ -37,11 +45,12 @@ def providers_config_error(config: dict) -> Optional[str]:
     return None
 
 
-def build_providers(config: dict, env: Optional[dict] = None) -> list:
+def build_providers(config: dict, env: Optional[dict] = None, data_dir=None) -> list:
     """按 providers 数组实例化 Provider：数组顺序即返回顺序。
 
     visible 为 false 或未列出的厂商不实例化；未知 vendor 跳过并提示；
     旧字典格式视为配置错误，返回空列表（由界面展示迁移提示）。
+    data_dir 指向记账等运行数据的落盘目录（DeepSeek 差值记账用）。
     """
     if providers_config_error(config):
         return []
@@ -68,7 +77,8 @@ def build_providers(config: dict, env: Optional[dict] = None) -> list:
         # Provider 内部仍按 {vendor: 项} 读取配置（BaseProvider 接口不变）
         per_vendor_config = dict(config or {})
         per_vendor_config["providers"] = {vendor: item}
-        instances.append(cls(per_vendor_config, env=env))
+        kwargs = {"data_dir": data_dir} if data_dir and vendor == "deepseek" else {}
+        instances.append(cls(per_vendor_config, env=env, **kwargs))
     return instances
 
 

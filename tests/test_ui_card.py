@@ -1,11 +1,13 @@
-"""卡片渲染单元测试（离屏）：结构 / 警示色 / 冻结徽标 / 截图。"""
+"""卡片渲染单元测试（离屏）：结构 / 警示色 / 冻结徽标 / 余额行 / 截图。"""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
+from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QLabel, QProgressBar
 
 from app.model import (
+    BalanceInfo,
     ProviderStatus,
     QuotaSnapshot,
     QuotaWindow,
@@ -346,3 +348,244 @@ def test_update_snapshot_status_transitions(qapp):
     card.update_snapshot(snapshot)
     assert set(card._rows) == {"weekly"}
     assert card._rows["weekly"].percent_label.text() == "51%"
+
+
+def _balance_snapshot(**kwargs):
+    balance = BalanceInfo(currency="CNY", total=110.0, granted=10.0, today_spent=5.23)
+    for key, value in kwargs.items():
+        setattr(balance, key, value)
+    snapshot = _snapshot("deepseek", [])
+    snapshot.balance = balance
+    return snapshot
+
+
+def test_card_renders_balance_row(qapp, tmp_path):
+    # 默认 fixture：total=110、granted=10、topped_up 缺失 -> 推导 100，拆分展示
+    card = AccountCard(_balance_snapshot(today_spent_estimated=False))
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    for expected in ("今日已用", "余额", "¥5.23", "¥100.00 + ¥10.00"):
+        assert expected in labels
+    assert not any("（估算）" in text for text in labels)
+    assert card.findChildren(QProgressBar) == []
+    assert not any("未订阅" in text for text in labels)
+    out = tmp_path / "card_deepseek.png"
+    assert card.grab().save(str(out))
+
+
+def test_card_balance_segment_order_in_single_row(qapp):
+    # 单行两段从左至右：今日已用、余额（赠送 > 0 时金额拆分为「充值 + 赠送」）
+    card = AccountCard(_balance_snapshot(today_spent_estimated=True))
+    names = [name.text() for name, _ in card._balance_row._labels]
+    values = [value.text() for _, value in card._balance_row._labels]
+    assert names == ["今日已用", "余额"]
+    assert values == ["¥5.23（估算）", "¥100.00 + ¥10.00"]
+
+
+def test_card_balance_zero_granted_shows_total_only(qapp):
+    card = AccountCard(_balance_snapshot(granted=0))
+    card.show()
+    values = [value.text() for _, value in card._balance_row._labels]
+    assert values[1] == "¥110.00"  # 无赠送：仅总额，无「+ 赠送」部分
+
+
+def test_card_balance_explicit_topped_up_displayed(qapp):
+    # 充值余额显式返回时直接展示：105 + 28（合计即总余额 133）
+    card = AccountCard(
+        _balance_snapshot(total=133.0, topped_up=105.0, granted=28.0)
+    )
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "余额" in labels
+    assert "¥105.00 + ¥28.00" in labels
+
+
+def test_card_balance_topped_up_derived_when_missing(qapp):
+    # 充值余额缺失时以 total - granted 推导：133 - 28 = 105
+    card = AccountCard(
+        _balance_snapshot(total=133.0, topped_up=None, granted=28.0)
+    )
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "¥105.00 + ¥28.00" in labels
+
+
+def test_card_balance_granted_exceeds_total_clamps_zero(qapp):
+    # 异常数据（赠送 > 总额）推导为负时夹取 0，不显示负数
+    card = AccountCard(_balance_snapshot(granted=200.0))
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "¥0.00 + ¥200.00" in labels
+
+
+def test_card_balance_estimate_suffix(qapp):
+    card = AccountCard(_balance_snapshot(today_spent_estimated=True))
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "¥5.23（估算）" in labels
+
+
+def test_card_balance_usd_symbol(qapp):
+    card = AccountCard(_balance_snapshot(currency="USD"))
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "$100.00 + $10.00" in labels
+
+
+def test_card_balance_granted_missing_shows_plain_balance(qapp):
+    # 赠送缺失：按无赠送展示，金额仅为总余额
+    card = AccountCard(_balance_snapshot(granted=None))
+    card.show()
+    values = [value.text() for _, value in card._balance_row._labels]
+    assert values[1] == "¥110.00"
+
+
+def test_card_balance_today_spent_missing_omits_segment(qapp):
+    card = AccountCard(_balance_snapshot(today_spent=None))
+    card.show()
+    visible = [
+        (name.text(), value.text())
+        for (name, value) in card._balance_row._labels
+        if name.isVisible()
+    ]
+    assert visible == [("余额", "¥100.00 + ¥10.00")]  # 仅余额段可见展示
+
+
+def test_card_without_balance_shows_unsubscribed(qapp):
+    card = AccountCard(_snapshot("deepseek", []))
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert any("未订阅" in text for text in labels)
+    assert card._balance_row is None
+
+
+def test_card_balance_update_in_place(qapp):
+    card = AccountCard(_balance_snapshot())
+    row_before = card._balance_row
+    card.update_snapshot(
+        _balance_snapshot(total=90.0, today_spent=20.0, today_spent_estimated=True)
+    )
+    assert card._balance_row is row_before  # 原地复用而非重建
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "¥80.00 + ¥10.00" in labels  # 90 - 10 推导充值余额
+    assert "¥20.00（估算）" in labels
+
+
+def test_card_balance_removed_when_total_missing(qapp):
+    card = AccountCard(_balance_snapshot())
+    card.update_snapshot(_balance_snapshot(total=None))
+    assert card._balance_row is None
+
+
+def test_card_stale_balance_kept_with_annotation(qapp):
+    snapshot = _balance_snapshot()
+    snapshot.stale = True
+    snapshot.stale_error = "timeout"
+    snapshot.stale_since = datetime(2026, 10, 19, 10, 30, tzinfo=timezone.utc)
+    card = AccountCard(snapshot)
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert "¥100.00 + ¥10.00" in labels  # 沿用旧余额数据
+    assert any("显示旧数据" in text for text in labels)
+
+
+def test_card_balance_notes_rendered(qapp):
+    snapshot = _balance_snapshot()
+    snapshot.notes.append("今日精确消费获取失败：userToken 可能已过期，请在浏览器 localStorage 重新复制（步骤见 README）")
+    card = AccountCard(snapshot)
+    card.show()
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert any("今日精确消费获取失败" in text for text in labels)
+    assert "¥100.00 + ¥10.00" in labels
+
+
+def test_card_balance_error_state_clears_rows(qapp):
+    card = AccountCard(_balance_snapshot())
+    card.update_snapshot(
+        _snapshot("deepseek", [], status=ProviderStatus.ERROR, error="HTTP 500")
+    )
+    assert card._balance_row is None
+    assert card._body.count() == 1  # 仅剩特殊状态标签（余额行已出布局）
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert any("获取失败" in text for text in labels)
+
+
+def test_card_balance_unconfigured_clears_rows(qapp):
+    card = AccountCard(_balance_snapshot())
+    card.update_snapshot(_snapshot("deepseek", [], status=ProviderStatus.UNCONFIGURED))
+    assert card._balance_row is None
+    labels = [l.text() for l in card.findChildren(QLabel)]
+    assert any("未配置" in text for text in labels)
+
+
+def test_card_balance_name_width_defaults_to_row_layout(qapp):
+    card = AccountCard(
+        _balance_snapshot(), row_layout={"name_width": 66}
+    )
+    name_labels = [
+        label
+        for label, _ in card._balance_row._labels
+    ]
+    assert all(label.width() == 52 for label in name_labels)  # 默认对齐 name_width
+
+
+def test_card_balance_row_layout_configured_independently(qapp):
+    card = AccountCard(
+        _balance_snapshot(),
+        row_layout={"name_width": 40},
+        balance_row_layout={"name_width": 80},
+    )
+    card.show()
+    balance_name_labels = [label for label, _ in card._balance_row._labels]
+    assert all(label.width() == 80 for label in balance_name_labels)
+    window = QuotaWindow(type=WindowType.WEEKLY, percent=50)
+    window_card = AccountCard(
+        _snapshot("glm", [window]), balance_row_layout={"name_width": 80}
+    )
+    assert window_card._rows["weekly"].name_label.width() == 52
+
+
+def test_card_balance_per_segment_width_overrides(qapp):
+    # 按段覆盖：今日已用段名称 64、数值 88；余额段回退 name_width 52、数值自适应
+    card = AccountCard(
+        _balance_snapshot(),
+        balance_row_layout={
+            "name_width": 52,
+            "spent_name_width": 64,
+            "spent_value_width": 88,
+        },
+    )
+    card.show()
+    (spent_name, spent_value), (balance_name, balance_value) = (
+        card._balance_row._labels
+    )
+    assert spent_name.width() == 64
+    assert spent_value.width() == 88
+    assert spent_value.alignment() == Qt.AlignRight | Qt.AlignVCenter
+    assert balance_name.width() == 52
+    assert balance_value.maximumWidth() == 16777215  # 未定宽（Qt 默认上限）
+
+
+def test_card_balance_unified_value_width_applies_to_all_segments(qapp):
+    card = AccountCard(
+        _balance_snapshot(),
+        balance_row_layout={"value_width": 72},
+    )
+    values = [value for _, value in card._balance_row._labels]
+    assert all(value.width() == 72 for value in values)
+    assert all(
+        value.alignment() == Qt.AlignRight | Qt.AlignVCenter for value in values
+    )
+
+
+def test_card_balance_per_segment_value_overrides_unified(qapp):
+    card = AccountCard(
+        _balance_snapshot(),
+        balance_row_layout={
+            "value_width": 72,
+            "balance_value_width": 96,
+        },
+    )
+    values = [value for _, value in card._balance_row._labels]
+    assert values[0].width() == 72  # 统一 value_width
+    assert values[1].width() == 96  # 按段覆盖优先

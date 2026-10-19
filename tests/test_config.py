@@ -104,7 +104,7 @@ def test_default_providers_is_visible_list():
     providers = DEFAULT_CONFIG["providers"]
     assert isinstance(providers, list)
     assert [item["vendor"] for item in providers] == [
-        "opencode-go", "ark", "glm", "kimi",
+        "opencode-go", "ark", "glm", "kimi", "deepseek",
     ]
     assert all(item.get("visible") is True for item in providers)
 
@@ -114,8 +114,24 @@ def test_template_providers_parse_as_list():
     assert isinstance(data["providers"], list)
     assert data["providers"][0]["vendor"] == "opencode-go"
     assert {item["vendor"] for item in data["providers"]} == {
-        "opencode-go", "ark", "glm", "kimi",
+        "opencode-go", "ark", "glm", "kimi", "deepseek",
     }
+
+
+def test_template_documents_deepseek_user_token():
+    assert '"vendor": "deepseek"' in CONFIG_TEMPLATE
+    assert '"user_token"' in CONFIG_TEMPLATE
+    assert '"currency"' in CONFIG_TEMPLATE
+
+
+def test_balance_row_layout_defaults_align_with_row_layout():
+    assert DEFAULT_CONFIG["balance_row_layout"] == {"name_width": 52}
+    assert (
+        DEFAULT_CONFIG["balance_row_layout"]["name_width"]
+        == DEFAULT_CONFIG["row_layout"]["name_width"]
+    )
+    data = parse_jsonc(CONFIG_TEMPLATE)
+    assert data["balance_row_layout"] == {"name_width": 52}
 
 
 def test_ensure_default_config_writes_template_once(tmp_path):

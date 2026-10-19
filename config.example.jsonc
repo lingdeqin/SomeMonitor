@@ -35,8 +35,25 @@
     "reset_width": 104
   },
 
+  // 余额行（DeepSeek 等按量付费卡片）宽度配置（像素）。
+  // 两段（今日已用 / 余额）结构：赠送余额 > 0 时余额金额显示为
+  // 「¥充值 + ¥赠送」，否则仅「¥总额」。
+  // - name_width：两段名称默认宽，默认 52；名称偏挤时可调大，
+  //   不影响窗口行的五段对齐。
+  // - 按段覆盖（可选）：<段>_name_width / <段>_value_width，
+  //   段名 spent=今日已用、balance=余额；
+  //   数值宽设置后定宽右对齐，未设置自适应内容宽度。
+  // 示例：今日已用段加宽对齐，余额段走默认：
+  //   "balance_row_layout": {
+  //     "name_width": 52,
+  //     "spent_name_width": 64, "spent_value_width": 88
+  //   }
+  "balance_row_layout": {
+    "name_width": 52
+  },
+
   // 各厂商配置：数组顺序即卡片顺序。
-  // - "vendor"：厂商（opencode-go / ark / glm / kimi）
+  // - "vendor"：厂商（opencode-go / ark / glm / kimi / deepseek）
   // - "visible"：是否显示；false 时该厂商不采集、不显示卡片
   // 没有购买套餐的厂商可整项删除，或把 visible 设为 false。
   // 每个账号一张卡片；accounts 留空数组时走环境变量 / CLI 自动发现。
@@ -104,6 +121,34 @@
           "label": "主号",
           "api_key": "sk-kimi-xxxxxxxxxxxx",
           "refresh_token": "eyJhbGciOi...（浏览器 localStorage 中 refresh_token 的完整值）"
+        }
+      ]
+    },
+
+    // ------------------------------ DeepSeek ------------------------------
+    // 按量付费账户（区别于上面的订阅制套餐）：卡片在单行内依次显示
+    // 今日已用 / 余额，没有额度窗口与重置时间。赠送余额 > 0 时余额金额
+    // 显示为「¥充值 + ¥赠送」，否则仅「¥总额」。
+    // api_key：在 https://platform.deepseek.com 创建；也可用环境变量 DEEPSEEK_API_KEY。
+    // user_token（可选）：想要「今日已用」精确值时配置——
+    //   1. 浏览器打开并登录 https://platform.deepseek.com
+    //   2. F12 → 应用/Application → 本地存储/Local Storage → platform.deepseek.com
+    //   3. 找到键名 userToken，复制值里 JSON 内层的 "value" 字段（长字符串）
+    //   注意：是会话令牌会过期；失效后自动回退为差值记账估算值（标注「估算」），
+    //   重新复制一次即可。也可用环境变量 DEEPSEEK_USER_TOKEN。
+    // currency（可选）：多币种账户（CNY/USD 并存）指定展示币种；
+    //   不配置时默认展示余额最大的币种。
+    // 差值记账说明：只依赖官方余额接口轮询累计，悬浮窗未运行期间的消费会计不进，
+    //   充值当日也会失真——属估算固有局限，故展示时标注「（估算）」。
+    {
+      "vendor": "deepseek",
+      "visible": true,
+      "accounts": [
+        {
+          "label": "主号",
+          "api_key": "sk-xxxxxxxxxxxxxxxx",
+          "user_token": "eyJ...（platform.deepseek.com localStorage 中 userToken 的 value 值）",
+          "currency": "CNY"
         }
       ]
     }

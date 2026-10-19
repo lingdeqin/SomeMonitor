@@ -77,6 +77,21 @@ class QuotaWindow:
 
 
 @dataclass
+class BalanceInfo:
+    """按量付费账户的余额信息（如 DeepSeek）；缺失字段保持缺省，不伪造数值。"""
+
+    # 币种代码（如 "CNY" / "USD"），同时决定当日消费的累计口径
+    currency: Optional[str] = None
+    total: Optional[float] = None
+    # 赠送余额（未过期赠金）
+    granted: Optional[float] = None
+    topped_up: Optional[float] = None
+    # 当天已用金额；True 表示来自差值记账估算而非精确接口
+    today_spent: Optional[float] = None
+    today_spent_estimated: bool = False
+
+
+@dataclass
 class QuotaSnapshot:
     """某厂商某账号一次采集的结果（一家可能拆多个计划，如 ARK 的 Coding/Agent Plan）。"""
 
@@ -95,6 +110,8 @@ class QuotaSnapshot:
     viewer_account_id: Optional[str] = None
     # 卡片底部展示的灰字提示行（如「月度会员额度获取失败：Cookie 已过期」）
     notes: list = field(default_factory=list)
+    # 按量付费账户的余额信息（如 DeepSeek）；窗口型厂商保持 None
+    balance: Optional[BalanceInfo] = None
 
 
 def to_number(value: Any) -> Optional[float]:
