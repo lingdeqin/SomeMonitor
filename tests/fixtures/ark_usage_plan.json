@@ -1,0 +1,50 @@
+{
+  "viewer": {
+    "auth_method": "sso",
+    "is_root": false,
+    "user_id": "12345",
+    "user_name": "alice",
+    "account_id": "210000",
+    "profile": "my-profile",
+    "tenant": "volc",
+    "region": "cn-beijing",
+    "project_name": "default"
+  },
+  "items": [
+    {
+      "product": "agent-plan",
+      "edition": "personal",
+      "tier": "medium",
+      "subscribed": true,
+      "periods": [
+        { "label": "5h", "used": 250, "total": 1000, "percent": 25, "reset_at": "2026-05-30T05:26:40+08:00" },
+        { "label": "weekly", "used": 12500, "total": 50000, "percent": 25, "reset_at": "2026-06-06T00:26:40+08:00" },
+        { "label": "monthly", "used": 50000, "total": 200000, "percent": 25, "reset_at": "2026-06-29T05:06:40+08:00" }
+      ]
+    },
+    {
+      "product": "coding-plan",
+      "edition": "personal",
+      "subscribed": true,
+      "periods": [
+        { "label": "session", "percent": 42, "reset_at": "2026-05-30T08:00:00+08:00" },
+        { "label": "weekly", "percent": 71, "reset_at": "2026-06-06T00:00:00+08:00" }
+      ]
+    },
+    {
+      "product": "agent-plan-team",
+      "edition": "team",
+      "tier": "large",
+      "seat_id": "seat-001",
+      "subscribed": true,
+      "error": "no seat bound to caller for agent-plan-team",
+      "periods": []
+    },
+    {
+      "product": "coding-plan-team",
+      "edition": "team",
+      "subscribed": false,
+      "periods": []
+    }
+  ]
+}

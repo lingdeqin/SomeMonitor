@@ -1,0 +1,18 @@
+{
+  "ratelimitCode5h": {
+    "ratio": 0.2101,
+    "enabled": true,
+    "resetTime": "2026-10-14T12:26:02.949218Z"
+  },
+  "subscriptionBalance": {
+    "id": "1a1394e6-2d52-8b5d-8000-0000e7d83e2d",
+    "feature": "FEATURE_OMNI",
+    "type": "SUBSCRIPTION",
+    "unit": "UNIT_CREDIT",
+    "amountUsedRatio": 0.0084,
+    "kimiCodeUsedRatio": 0.0084,
+    "expireTime": "2026-11-14T00:00:00Z",
+    "domain": "DOMAIN_NEXUS"
+  },
+  "boosterWallets": []
+}
