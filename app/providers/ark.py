@@ -327,19 +327,25 @@ def parse_arkcli_output(text: str, label: str = "默认") -> list:
             # 未订阅：展示「未订阅」而非 0%
             snapshots.append(snapshot)
             continue
-        for period in item.get("periods") or []:
-            if not isinstance(period, dict):
-                continue
+        periods = [p for p in item.get("periods") or [] if isinstance(p, dict)]
+        # percent 刻度判定按 item 整组进行（而非逐窗口）：
+        # - 旧版 arkcli 对 CodingPlan 按 0-1 比率下发（证据：.omo/evidence/ark_live.json）
+        # - 新版 arkcli（实测 1.0.38，2026-11）对 CodingPlan 也按 0-100 百分制下发
+        # 比率不可能 > 1，故任一窗口 percent > 1 即整组为百分制、不做换算；
+        # 全组 <= 1 时为兼容旧版仍按比率换算（歧义角下宁可误报高用量，
+        # 不可把 91% 显示成 0.9% 而掩盖额度耗尽）
+        item_percents = [to_number(p.get("percent")) for p in periods]
+        is_ratio_scale = all(v is None or v <= 1.0 for v in item_percents)
+        for period in periods:
             window_type = PERIOD_LABEL_MAP.get(str(period.get("label") or "").lower())
             if window_type is None:
                 continue
             used = to_number(period.get("used"))
             total = to_number(period.get("total"))
             percent = to_number(period.get("percent"))
-            # CodingPlan 后端实测按 0-1 比率下发 percent（证据：.omo/evidence/ark_live.json），
-            # 而 AgentPlan 的 percent 由 arkcli 以 used/total*100 计算（0-100）；
-            # 仅在缺 used/total（CodingPlan 形态）且值 <= 1 时按比率归一化为百分比
-            if percent is not None and used is None and total is None and percent <= 1.0:
+            # AgentPlan 的 percent 由 arkcli 以 used/total*100 计算（0-100），不动；
+            # 仅在缺 used/total（CodingPlan 形态）且整组判定为比率时归一化为百分比
+            if percent is not None and used is None and total is None and is_ratio_scale:
                 percent = round(percent * 100.0, 2)
             window = QuotaWindow(
                 type=window_type,

@@ -89,6 +89,37 @@ def test_parse_codingplan_percent_fraction_normalized():
     assert windows[WindowType.FIVE_H].remaining_percent == 8.4
 
 
+def test_codingplan_percent_scale_detected_per_item():
+    # 回归：新版 arkcli（实测 1.0.38，2026-11）对 CodingPlan 也按 0-100 百分制下发；
+    # 逐窗口 <=1 判定曾把 weekly=0.80 误乘 100 显示 80%（真实 0.8%）。
+    # 同一 item 内任一窗口 > 1（monthly=31.38）即证明整组为百分制
+    raw = json.dumps(
+        {
+            "items": [
+                {
+                    "product": "coding-plan",
+                    "edition": "personal",
+                    "subscribed": True,
+                    "periods": [
+                        {"label": "session", "percent": 6.017638,
+                         "reset_at": "2026-11-10T20:47:18+08:00"},
+                        {"label": "weekly", "percent": 0.8023517333333334,
+                         "reset_at": "2026-11-16T00:00:00+08:00"},
+                        {"label": "monthly", "percent": 31.378269333333332,
+                         "reset_at": "2026-11-13T23:59:59+08:00"},
+                    ],
+                    "updated_at": 1794301610,
+                }
+            ],
+        }
+    )
+    snapshots = parse_arkcli_output(raw, label="x")
+    windows = {w.type: w for w in snapshots[0].windows}
+    assert windows[WindowType.WEEKLY].percent == pytest.approx(0.8023517333333334)
+    assert windows[WindowType.FIVE_H].percent == pytest.approx(6.017638)
+    assert windows[WindowType.MONTHLY].percent == pytest.approx(31.378269333333332)
+
+
 def test_agentplan_percent_scale_untouched_when_used_total_present():
     raw = json.dumps(
         {
